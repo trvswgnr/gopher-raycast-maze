@@ -127,142 +127,176 @@ func rotatePlayer(p *Player, angle float64) {
 	p.planeX = p.planeX*math.Cos(angle) - p.planeY*math.Sin(angle)
 	p.planeY = oldPlaneX*math.Sin(angle) + p.planeY*math.Cos(angle)
 }
-
 func (g *Game) Draw(screen *ebiten.Image) {
-	floorColor := color.RGBA{30, 30, 30, 255}      // dark gray for floor
-	ceilingColor := color.RGBA{160, 227, 254, 255} // sky blue for ceiling
+	g.drawFloorAndCeiling(screen)
+	g.drawBlocks(screen)
+	g.drawMinimap(screen)
+	g.drawDebugInfo(screen)
+}
+
+func (g *Game) drawFloorAndCeiling(screen *ebiten.Image) {
+	floorColor := color.RGBA{30, 30, 30, 255}
+	ceilingColor := color.RGBA{160, 227, 254, 255}
 
 	for y := 0; y < screenHeight; y++ {
 		if y < screenHeight/2 {
-			// draw ceiling
 			vector.DrawFilledRect(screen, 0, float32(y), float32(screenWidth), 1, ceilingColor, false)
 		} else {
-			// draw floor
 			vector.DrawFilledRect(screen, 0, float32(y), float32(screenWidth), 1, floorColor, false)
 		}
 	}
+}
 
+func (g *Game) drawBlocks(screen *ebiten.Image) {
 	for x := 0; x < screenWidth; x++ {
-		cameraX := 2*float64(x)/float64(screenWidth) - 1
-		rayDirX := g.player.dirX + g.player.planeX*cameraX
-		rayDirY := g.player.dirY + g.player.planeY*cameraX
+		rayDirX, rayDirY := g.calculateRayDirection(x)
+		entities := g.castRay(rayDirX, rayDirY)
+		g.drawEntities(screen, x, entities)
+	}
+}
 
-		mapX, mapY := int(g.player.x), int(g.player.y)
+func (g *Game) calculateRayDirection(x int) (float64, float64) {
+	cameraX := 2*float64(x)/float64(screenWidth) - 1
+	rayDirX := g.player.dirX + g.player.planeX*cameraX
+	rayDirY := g.player.dirY + g.player.planeY*cameraX
+	return rayDirX, rayDirY
+}
 
-		var sideDistX, sideDistY float64
+func (g *Game) castRay(rayDirX, rayDirY float64) []struct {
+	entity LevelEntity
+	dist   float64
+	side   int
+} {
+	mapX, mapY := int(g.player.x), int(g.player.y)
+	var sideDistX, sideDistY float64
+	deltaDistX := math.Abs(1 / rayDirX)
+	deltaDistY := math.Abs(1 / rayDirY)
+	var stepX, stepY int
+	var side int
 
-		deltaDistX := math.Abs(1 / rayDirX)
-		deltaDistY := math.Abs(1 / rayDirY)
+	if rayDirX < 0 {
+		stepX = -1
+		sideDistX = (g.player.x - float64(mapX)) * deltaDistX
+	} else {
+		stepX = 1
+		sideDistX = (float64(mapX) + 1.0 - g.player.x) * deltaDistX
+	}
+	if rayDirY < 0 {
+		stepY = -1
+		sideDistY = (g.player.y - float64(mapY)) * deltaDistY
+	} else {
+		stepY = 1
+		sideDistY = (float64(mapY) + 1.0 - g.player.y) * deltaDistY
+	}
 
-		var stepX, stepY int
-		var side int
+	var hitWall bool
+	var entities []struct {
+		entity LevelEntity
+		dist   float64
+		side   int
+	}
 
-		if rayDirX < 0 {
-			stepX = -1
-			sideDistX = (g.player.x - float64(mapX)) * deltaDistX
+	for !hitWall {
+		if sideDistX < sideDistY {
+			sideDistX += deltaDistX
+			mapX += stepX
+			side = 0
 		} else {
-			stepX = 1
-			sideDistX = (float64(mapX) + 1.0 - g.player.x) * deltaDistX
+			sideDistY += deltaDistY
+			mapY += stepY
+			side = 1
 		}
-		if rayDirY < 0 {
-			stepY = -1
-			sideDistY = (g.player.y - float64(mapY)) * deltaDistY
-		} else {
-			stepY = 1
-			sideDistY = (float64(mapY) + 1.0 - g.player.y) * deltaDistY
-		}
-
-		var perpWallDist float64
-		var hitWall bool
-		var entities []struct {
-			entity LevelEntity
-			dist   float64
-			side   int
-		}
-
-		for !hitWall {
-			if sideDistX < sideDistY {
-				sideDistX += deltaDistX
-				mapX += stepX
-				side = 0
+		hitEntity := g.level.getEntityAt(mapX, mapY)
+		if hitEntity != LevelEntity_Empty {
+			var dist float64
+			if side == 0 {
+				dist = (float64(mapX) - g.player.x + (1-float64(stepX))/2) / rayDirX
 			} else {
-				sideDistY += deltaDistY
-				mapY += stepY
-				side = 1
+				dist = (float64(mapY) - g.player.y + (1-float64(stepY))/2) / rayDirY
 			}
-			hitEntity := g.level.getEntityAt(mapX, mapY)
-			if hitEntity != LevelEntity_Empty {
-				var dist float64
-				if side == 0 {
-					dist = (float64(mapX) - g.player.x + (1-float64(stepX))/2) / rayDirX
-				} else {
-					dist = (float64(mapY) - g.player.y + (1-float64(stepY))/2) / rayDirY
-				}
-				entities = append(entities, struct {
-					entity LevelEntity
-					dist   float64
-					side   int
-				}{hitEntity, dist, side})
+			entities = append(entities, struct {
+				entity LevelEntity
+				dist   float64
+				side   int
+			}{hitEntity, dist, side})
 
-				if hitEntity == LevelEntity_Wall {
-					hitWall = true
-				}
+			if hitEntity == LevelEntity_Wall {
+				hitWall = true
 			}
-		}
-
-		// render entities from far to near
-		for i := len(entities) - 1; i >= 0; i-- {
-			entity := entities[i]
-			perpWallDist = entity.dist
-
-			lineHeight := int(float64(screenHeight) / perpWallDist)
-			drawStart := -lineHeight/2 + screenHeight/2
-			drawEnd := lineHeight/2 + screenHeight/2
-
-			// increase the height only for walls, keeping the bottom aligned
-			if entity.entity == LevelEntity_Wall {
-				factor := 2.0 // adjusting this value will change the height of the walls
-				lineHeight := int(float64(lineHeight) * factor)
-				drawStart = drawEnd - lineHeight
-			}
-
-			if drawStart < 0 {
-				drawStart = 0
-			}
-			if drawEnd >= screenHeight {
-				drawEnd = screenHeight - 1
-			}
-
-			var wallColor color.RGBA
-			switch entity.entity {
-			case LevelEntity_Wall:
-				wallColor = color.RGBA{100, 100, 100, 255} // gray
-			case LevelEntity_Enemy:
-				wallColor = color.RGBA{58, 231, 144, 255} // springgreen
-			case LevelEntity_Exit:
-				wallColor = color.RGBA{95, 158, 160, 255} // cadetblue
-			case LevelEntity_Player:
-				wallColor = color.RGBA{218, 165, 32, 255} // goldenrod
-			default:
-				wallColor = color.RGBA{200, 200, 200, 255} // white
-			}
-
-			if entity.side == 1 {
-				wallColor.R = wallColor.R / 2
-				wallColor.G = wallColor.G / 2
-				wallColor.B = wallColor.B / 2
-			}
-
-			vector.DrawFilledRect(screen, float32(x), float32(drawStart), 1, float32(drawEnd-drawStart), wallColor, false)
 		}
 	}
 
-	// draw minimap
+	return entities
+}
+
+func (g *Game) drawEntities(screen *ebiten.Image, x int, entities []struct {
+	entity LevelEntity
+	dist   float64
+	side   int
+}) {
+	for i := len(entities) - 1; i >= 0; i-- {
+		entity := entities[i]
+		_, drawStart, drawEnd := g.calculateLineParameters(entity.dist, entity.entity)
+		wallColor := g.getEntityColor(entity.entity, entity.side)
+		vector.DrawFilledRect(screen, float32(x), float32(drawStart), 1, float32(drawEnd-drawStart), wallColor, false)
+	}
+}
+
+func (g *Game) calculateLineParameters(dist float64, entity LevelEntity) (int, int, int) {
+	lineHeight := int(float64(screenHeight) / dist)
+	drawStart := -lineHeight/2 + screenHeight/2
+	drawEnd := lineHeight/2 + screenHeight/2
+
+	if entity == LevelEntity_Wall {
+		factor := 2.0
+		lineHeight = int(float64(lineHeight) * factor)
+		drawStart = drawEnd - lineHeight
+	}
+
+	if drawStart < 0 {
+		drawStart = 0
+	}
+	if drawEnd >= screenHeight {
+		drawEnd = screenHeight - 1
+	}
+
+	return lineHeight, drawStart, drawEnd
+}
+
+func (g *Game) getEntityColor(entity LevelEntity, side int) color.RGBA {
+	var entityColor color.RGBA
+	switch entity {
+	case LevelEntity_Wall:
+		entityColor = color.RGBA{100, 100, 100, 255}
+	case LevelEntity_Enemy:
+		entityColor = color.RGBA{58, 231, 144, 255}
+	case LevelEntity_Exit:
+		entityColor = color.RGBA{95, 158, 160, 255}
+	case LevelEntity_Player:
+		entityColor = color.RGBA{218, 165, 32, 255}
+	default:
+		entityColor = color.RGBA{200, 200, 200, 255}
+	}
+
+	if side == 1 {
+		entityColor.R = entityColor.R / 2
+		entityColor.G = entityColor.G / 2
+		entityColor.B = entityColor.B / 2
+	}
+
+	return entityColor
+}
+
+func (g *Game) drawMinimap(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(float64(screenWidth-g.level.width()*4-10), 10)
 	screen.DrawImage(g.minimap, op)
 
-	// draw player on minimap
+	g.drawPlayerOnMinimap(screen)
+	g.drawEnemiesOnMinimap(screen)
+}
+
+func (g *Game) drawPlayerOnMinimap(screen *ebiten.Image) {
 	vector.DrawFilledCircle(
 		screen,
 		float32(screenWidth-g.level.width()*4-10+int(g.player.x*4)),
@@ -271,8 +305,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		color.RGBA{255, 0, 0, 255},
 		false,
 	)
+}
 
-	// draw enemies on minimap
+func (g *Game) drawEnemiesOnMinimap(screen *ebiten.Image) {
 	for _, enemy := range g.enemies {
 		vector.DrawFilledCircle(
 			screen,
@@ -283,11 +318,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			false,
 		)
 	}
+}
 
-	// display fps
+func (g *Game) drawDebugInfo(screen *ebiten.Image) {
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %0.2f", ebiten.ActualFPS()))
-
-	// display controls
 	ebitenutil.DebugPrintAt(screen, "move with arrow keys", 10, screenHeight-40)
 	ebitenutil.DebugPrintAt(screen, "ESC to exit", 10, screenHeight-20)
 }
