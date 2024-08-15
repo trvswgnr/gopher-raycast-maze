@@ -221,7 +221,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 			// increase the height only for walls, keeping the bottom aligned
 			if entity.entity == LevelEntity_Wall {
-				tallLineHeight := int(float64(lineHeight) * 1.5) // adjust this factor as needed
+				factor := 2.0 // adjusting this value will change the height of the walls
+				tallLineHeight := int(float64(lineHeight) * factor)
 				drawStart = drawEnd - tallLineHeight
 			}
 
@@ -262,11 +263,25 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.DrawImage(g.minimap, op)
 
 	// draw player on minimap
-	vector.DrawFilledCircle(screen, float32(screenWidth-g.level.width()*4-10+int(g.player.x*4)), float32(10+int(g.player.y*4)), 2, color.RGBA{255, 0, 0, 255}, false)
+	vector.DrawFilledCircle(
+		screen,
+		float32(screenWidth-g.level.width()*4-10+int(g.player.x*4)),
+		float32(10+int(g.player.y*4)),
+		2,
+		color.RGBA{255, 0, 0, 255},
+		false,
+	)
 
 	// draw enemies on minimap
 	for _, enemy := range g.enemies {
-		vector.DrawFilledCircle(screen, float32(screenWidth-g.level.width()*4-10+int(enemy.x*4)), float32(10+int(enemy.y*4)), 2, color.RGBA{0, 255, 0, 255}, false)
+		vector.DrawFilledCircle(
+			screen,
+			float32(screenWidth-g.level.width()*4-10+int(enemy.x*4)),
+			float32(10+int(enemy.y*4)),
+			2,
+			color.RGBA{0, 255, 0, 255},
+			false,
+		)
 	}
 
 	// display fps
