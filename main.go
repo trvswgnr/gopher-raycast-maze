@@ -222,8 +222,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			// increase the height only for walls, keeping the bottom aligned
 			if entity.entity == LevelEntity_Wall {
 				factor := 2.0 // adjusting this value will change the height of the walls
-				tallLineHeight := int(float64(lineHeight) * factor)
-				drawStart = drawEnd - tallLineHeight
+				lineHeight := int(float64(lineHeight) * factor)
+				drawStart = drawEnd - lineHeight
 			}
 
 			if drawStart < 0 {
