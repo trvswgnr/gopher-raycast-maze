@@ -18,24 +18,20 @@ const (
 type Level [][]LevelEntity
 
 func NewLevel(imagePath string) Level {
-	// open image file
 	file, err := assets.Open(imagePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
 
-	// decode the image
 	img, _, err := image.Decode(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// get image bounds
 	bounds := img.Bounds()
 	width, height := bounds.Max.X, bounds.Max.Y
 
-	// create matrix
 	matrix := make(Level, height)
 	for i := range matrix {
 		matrix[i] = make([]LevelEntity, width)
@@ -48,16 +44,16 @@ func NewLevel(imagePath string) Level {
 			r, g, b = r>>8, g>>8, b>>8 // convert from uint32 to uint8
 
 			switch {
-			case r == 255 && g == 255 && b == 255:
-				matrix[y][x] = LevelEntity_Empty // white (empty space)
-			case r == 0 && g == 0 && b == 0:
-				matrix[y][x] = LevelEntity_Wall // black (wall)
-			case r == 255 && g == 0 && b == 0:
-				matrix[y][x] = LevelEntity_Enemy // red (enemy)
-			case r == 0 && g == 255 && b == 0:
-				matrix[y][x] = LevelEntity_Exit // green (exit)
-			case r == 0 && g == 0 && b == 255:
-				matrix[y][x] = LevelEntity_Player // blue (player)
+			case r == 255 && g == 255 && b == 255: // white (empty space)
+				matrix[y][x] = LevelEntity_Empty
+			case r == 0 && g == 0 && b == 0: // black (wall)
+				matrix[y][x] = LevelEntity_Wall
+			case r == 255 && g == 0 && b == 0: // red (enemy)
+				matrix[y][x] = LevelEntity_Enemy
+			case r == 0 && g == 255 && b == 0: // green (exit)
+				matrix[y][x] = LevelEntity_Exit
+			case r == 0 && g == 0 && b == 255: // blue (player)
+				matrix[y][x] = LevelEntity_Player
 			}
 		}
 	}
